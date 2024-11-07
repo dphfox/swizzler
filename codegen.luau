@@ -1,4 +1,8 @@
-local FIELDS = {
+local fs = require("@lune/fs" :: string)
+
+local ALL_FIELDS = {"x", "X", "y", "Y", "z", "Z", "w", "W", "_"}
+
+local FIELD_EXPRESSIONS = {
 	x = "input.X",
 	X = "input.X * -1",
 	y = "input.Y",
@@ -22,20 +26,18 @@ local DIMENSIONS = {
 	_ = 0
 }
 
-local INPUT_TYPES_BY_DIMENSION = {
-	[0] = "any",
-	[1] = "Vector2 | Vector3 | vector",
-	[2] = "Vector2 | Vector3 | vector",
-	[3] = "Vector3 | vector",
-	[4] = "vector"
+local PRELUDE = {
+	"export type Has0D = any",
+	"export type Has1D = Vector2 | Vector3 | {X: number}",
+	"export type Has2D = Vector2 | Vector3 | {X: number, Y: number}",
+	"export type Has3D = Vector3 | {X: number, Y: number, Z: number}",
+	"export type Has4D = {X: number, Y: number, Z: number, W: number}",
 }
 
 local OUTPUT_TYPES_BY_DIMENSION = {
-	[0] = "nil",
 	[1] = "number",
 	[2] = "Vector2",
-	[3] = "Vector3",
-	[4] = "vector"
+	[3] = "Vector3"
 }
 
 local function makeSwizzleFn(
@@ -49,18 +51,17 @@ local function makeSwizzleFn(
 	end
 	local outputDimension = #fieldNames
 
-	local inputType = INPUT_TYPES_BY_DIMENSION[inputDimension]
+	local inputType = `Has{inputDimension}D`
 	local outputType = OUTPUT_TYPES_BY_DIMENSION[outputDimension]
 	
 	local body = 
-		if outputType == "nil" then {"\treturn nil"}
-		elseif outputType == "number" then {`\treturn {FIELDS[fieldNames]}`}
+		if outputType == "number" then {`\treturn {FIELD_EXPRESSIONS[fieldNames[1]]}`}
 		else (function()
 			local body = {
 				`\treturn {outputType}.new(`
 			}
 			for index, fieldName in fieldNames do
-				table.insert(body, `\t\t{FIELDS[fieldName]}{if index == #fieldNames then "" else ","}`)
+				table.insert(body, `\t\t{FIELD_EXPRESSIONS[fieldName]}{if index == #fieldNames then "" else ","}`)
 			end
 			table.insert(body, "\t)")
 			return body
@@ -72,4 +73,39 @@ local function makeSwizzleFn(
 		"\nend\n"
 end
 
-print(makeSwizzleFn {"x", "_", "Z"})
+local function makeSwizzleModule()
+	local functions = {}
+
+	for numDimensions = 1, #OUTPUT_TYPES_BY_DIMENSION do
+		local fieldIndices = table.create(numDimensions, 1)
+		local fieldNames = table.create(numDimensions, ALL_FIELDS[1])
+		;(function()
+			while true do
+				print("Making swizzle function", table.concat(fieldNames))
+				table.insert(functions, makeSwizzleFn(fieldNames))
+				for dimension = 1, numDimensions do
+					local carry = false
+					fieldIndices[dimension] += 1
+					if fieldIndices[dimension] > #ALL_FIELDS then
+						fieldIndices[dimension] = 1
+						carry = true
+					end
+					fieldNames[dimension] = ALL_FIELDS[fieldIndices[dimension]]
+					if carry and dimension == numDimensions then
+						return
+					elseif not carry then
+						break
+					end
+				end
+			end
+		end)()
+	end
+
+	return
+		"local swizzle = {}\n\n" ..
+		table.concat(PRELUDE, "\n") .. "\n\n" ..
+		table.concat(functions, "\n") ..
+		"\nreturn swizzle"
+end
+
+fs.writeFile("swizzle.luau", makeSwizzleModule())
