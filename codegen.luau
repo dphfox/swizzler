@@ -4,13 +4,13 @@ local ALL_FIELDS = {"x", "X", "y", "Y", "z", "Z", "w", "W", "_"}
 
 local FIELD_EXPRESSIONS = {
 	x = "input.X",
-	X = "input.X * -1",
+	X = "-input.X",
 	y = "input.Y",
-	Y = "input.Y * -1",
+	Y = "-input.Y",
 	z = "input.Z",
-	Z = "input.Z * - 1",
+	Z = "-input.Z",
 	w = "input.W",
-	W = "input.W * -1",
+	W = "-input.W",
 	_ = "0"
 }
 
